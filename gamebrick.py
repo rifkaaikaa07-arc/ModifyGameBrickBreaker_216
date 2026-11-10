@@ -10,6 +10,9 @@ try:
 except ImportError:
     winsound = None
 
+# Kecepatan bola (dulu 5.2 dan 0.35)
+BALL_SPEED = 7.5
+BALL_SPEED_PER_LEVEL = 0.8
 
 WIDTH = 900
 HEIGHT = 650
@@ -139,7 +142,7 @@ class Ball:
     def __init__(self, canvas, level=1):
         self.canvas = canvas
         self.radius = 8
-        self.speed = 5.2 + min(level - 1, 8) * 0.35
+        self.speed = BALL_SPEED + min(level - 1, 8) * BALL_SPEED_PER_LEVEL
 
         self.x = WIDTH / 2
         self.y = HEIGHT - 112
