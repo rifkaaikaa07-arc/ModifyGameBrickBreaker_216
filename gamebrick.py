@@ -539,3 +539,185 @@ class BrickBreaker:
             font=("Consolas", 11),
             tags="overlay"
         )
+
+    def key_down(self, event):
+        key = event.keysym.lower()
+        self.keys.add(key)
+
+        if key in ("return", "space"):
+            if self.state == "menu":
+                self.start_game()
+            elif self.state == "paused":
+                # Lanjut dari pause, tanpa suara mulai
+                self.start_game(sound=False)
+            elif self.state in ("gameover", "won"):
+                self.reset_game()
+                self.start_game()
+
+        elif key == "p":
+            self.toggle_pause()
+
+        elif key == "r":
+            self.reset_game()
+            self.start_game()
+
+    def key_up(self, event):
+        self.keys.discard(event.keysym.lower())
+
+    def start_game(self, sound=True):
+        if self.state == "menu":
+            self.canvas.delete("menu")
+
+        self.canvas.delete("overlay")
+        self.state = "playing"
+
+        if sound:
+            self.play_sound("start")
+
+        self.game_loop()
+
+    def toggle_pause(self):
+        if self.state == "playing":
+            self.state = "paused"
+            self.show_overlay(
+                "PAUSED",
+                "Press P or ENTER to continue"
+            )
+
+        elif self.state == "paused":
+            self.start_game(sound=False)
+
+    def collision(self, a, b):
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+
+        return (
+            ax1 < bx2 and ax2 > bx1
+            and ay1 < by2 and ay2 > by1
+        )
+
+    # Bola jatuh melewati striker: langsung game over
+    def game_over(self):
+        self.state = "gameover"
+        self.combo = 0
+        self.high_score = max(self.high_score, self.score)
+        save_high_score(self.high_score)
+        self.play_sound("game_over")
+        self.show_overlay(
+            "GAME OVER",
+            f"SCORE: {self.score}  |  Press ENTER to retry"
+        )
+        self.update_hud()
+
+    def update_game(self):
+        direction = 0
+
+        if "left" in self.keys or "a" in self.keys:
+            direction -= 1
+
+        if "right" in self.keys or "d" in self.keys:
+            direction += 1
+
+        self.paddle.update(direction)
+
+        if self.ball.update():
+            self.game_over()
+            return
+
+        ball_rect = (
+            self.ball.x - self.ball.radius,
+            self.ball.y - self.ball.radius,
+            self.ball.x + self.ball.radius,
+            self.ball.y + self.ball.radius
+        )
+
+        # Collision with paddle
+        if self.collision(
+            ball_rect,
+            self.paddle.get_rect()
+        ) and self.ball.dy > 0:
+
+            self.ball.y = (
+                self.paddle.y - self.ball.radius - 1
+            )
+            self.ball.bounce_paddle(self.paddle)
+
+        # Collision with blocks
+        for block in self.blocks[:]:
+            if self.collision(ball_rect, block.get_rect()):
+                self.ball.bounce_block(block)
+
+                if block.hit():
+                    self.blocks.remove(block)
+
+                    self.combo += 1
+                    self.combo_timer = 100
+
+                    gained = 10 + min(
+                        self.combo - 1, 10
+                    ) * 2
+
+                    self.score += gained
+
+                    for _ in range(10):
+                        self.particles.append(
+                            Particle(
+                                self.canvas,
+                                block.x + block.width // 2,
+                                block.y + block.height // 2,
+                                block.color
+                            )
+                        )
+                else:
+                    self.combo = 0
+
+                break
+
+        # Combo timer
+        if self.combo_timer > 0:
+            self.combo_timer -= 1
+        else:
+            self.combo = 0
+
+        # Update particles
+        for particle in self.particles[:]:
+            if not particle.update():
+                self.particles.remove(particle)
+
+        # Next level
+        if not self.blocks:
+            self.level += 1
+
+            self.canvas.delete(self.paddle.id)
+            self.canvas.delete(self.ball.id)
+
+            self.paddle = Striker(self.canvas)
+            self.ball = Ball(self.canvas, self.level)
+            self.blocks = self.create_blocks()
+
+            self.combo = 0
+
+            self.play_sound("level_clear")
+            self.show_overlay(
+                f"LEVEL {self.level}",
+                "Press ENTER to continue"
+            )
+
+            self.state = "levelup"
+
+        self.update_hud()
+
+    def game_loop(self):
+        if self.state != "playing":
+            return
+
+        self.update_game()
+
+        if self.state == "playing":
+            self.root.after(FPS, self.game_loop)
+
+        elif self.state == "levelup":
+            self.state = "paused"
+
+    def run(self):
+        self.root.mainloop()
