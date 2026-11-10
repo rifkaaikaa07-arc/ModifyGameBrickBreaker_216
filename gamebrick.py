@@ -312,3 +312,230 @@ class Particle:
             return False
 
         return True
+
+
+class BrickBreaker:
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("BRICK BREAKER")
+        self.root.resizable(False, False)
+
+        self.canvas = tk.Canvas(
+            root,
+            width=WIDTH,
+            height=HEIGHT,
+            bg=BG,
+            highlightthickness=0
+        )
+        self.canvas.pack()
+
+        self.keys = set()
+        self.high_score = load_high_score()
+
+        self.root.bind("<KeyPress>", self.key_down)
+        self.root.bind("<KeyRelease>", self.key_up)
+        self.root.bind("<Left>", self.key_down)
+        self.root.bind("<Right>", self.key_down)
+
+        self.state = "menu"
+        self.reset_game()
+        self.state = "menu"
+
+        self.draw_menu()
+
+    # Memainkan suara. Di Windows memakai winsound (di thread
+    # terpisah supaya game tidak berhenti), di sistem lain
+    # memakai bunyi bell bawaan tkinter
+    def play_sound(self, name):
+        if winsound is not None:
+            threading.Thread(
+                target=_play_notes,
+                args=(SOUNDS[name],),
+                daemon=True
+            ).start()
+        else:
+            self.root.bell()
+
+    def reset_game(self):
+        self.canvas.delete("all")
+
+        self.score = 0
+        self.level = 1
+        self.combo = 0
+        self.combo_timer = 0
+        self.particles = []
+
+        self.draw_background()
+        self.draw_hud()
+
+        self.paddle = Striker(self.canvas)
+        self.ball = Ball(self.canvas, self.level)
+        self.blocks = self.create_blocks()
+
+        self.update_hud()
+
+    def draw_background(self):
+        for x in range(0, WIDTH, 45):
+            self.canvas.create_line(
+                x, 0, x, HEIGHT,
+                fill=GRID
+            )
+
+        for y in range(0, HEIGHT, 45):
+            self.canvas.create_line(
+                0, y, WIDTH, y,
+                fill=GRID
+            )
+
+    def draw_hud(self):
+        self.canvas.create_rectangle(
+            0, 0, WIDTH, HUD_H,
+            fill=PANEL,
+            outline=ACCENT,
+            width=2
+        )
+
+        mid = HUD_H // 2
+
+        self.score_text = self.canvas.create_text(
+            130, mid,
+            text="SCORE 0",
+            fill=TEXT,
+            font=("Consolas", 12, "bold")
+        )
+
+        self.best_text = self.canvas.create_text(
+            350, mid,
+            text="BEST 0",
+            fill=GOLD,
+            font=("Consolas", 11)
+        )
+
+        self.level_text = self.canvas.create_text(
+            570, mid,
+            text="LEVEL 1",
+            fill=BLUE_TEXT,
+            font=("Consolas", 11)
+        )
+
+        self.combo_text = self.canvas.create_text(
+            770, mid,
+            text="COMBO x0",
+            fill=PINK_TEXT,
+            font=("Consolas", 11)
+        )
+
+    def update_hud(self):
+        self.canvas.itemconfigure(
+            self.score_text,
+            text=f"SCORE {self.score}"
+        )
+
+        self.canvas.itemconfigure(
+            self.best_text,
+            text=f"BEST {max(self.high_score, self.score)}"
+        )
+
+        self.canvas.itemconfigure(
+            self.level_text,
+            text=f"LEVEL {self.level}"
+        )
+
+        self.canvas.itemconfigure(
+            self.combo_text,
+            text=f"COMBO x{self.combo}"
+        )
+
+    def create_blocks(self):
+        blocks = []
+
+        columns = BLOCK_COLUMNS
+        rows = min(4 + self.level, 8)
+
+        total_width = (
+            columns * BLOCK_W
+            + (columns - 1) * BLOCK_GAP_X
+        )
+
+        start_x = (WIDTH - total_width) // 2
+        start_y = HUD_H + 30
+
+        for row in range(rows):
+            for col in range(columns):
+                x = start_x + col * (BLOCK_W + BLOCK_GAP_X)
+                y = start_y + row * (BLOCK_H + BLOCK_GAP_Y)
+
+                blocks.append(
+                    Block(self.canvas, x, y, self.level)
+                )
+
+        return blocks
+
+    def draw_menu(self):
+        self.canvas.create_rectangle(
+            150, 200, 750, 450,
+            fill=PANEL,
+            outline=ACCENT,
+            width=2,
+            tags="menu"
+        )
+
+        self.canvas.create_text(
+            WIDTH // 2, 255,
+            text="BRICK BREAKER",
+            fill=PINK_TEXT,
+            font=("Consolas", 34, "bold"),
+            tags="menu"
+        )
+
+        self.canvas.create_text(
+            WIDTH // 2, 315,
+            text="BREAK THE BLOCKS. BEAT YOUR HIGH SCORE.",
+            fill=GREEN_TEXT,
+            font=("Consolas", 10),
+            tags="menu"
+        )
+
+        self.canvas.create_text(
+            WIDTH // 2, 365,
+            text="[ ENTER ] START GAME",
+            fill=RED_TEXT,
+            font=("Consolas", 14, "bold"),
+            tags="menu"
+        )
+
+        self.canvas.create_text(
+            WIDTH // 2, 410,
+            text="ARROW KEYS / A-D : MOVE     P : PAUSE     R : RESTART",
+            fill=TEXT,
+            font=("Consolas", 9),
+            tags="menu"
+        )
+
+    def show_overlay(self, title, subtitle):
+        self.canvas.delete("overlay")
+
+        self.canvas.create_rectangle(
+            200, 260, 700, 380,
+            fill=PANEL,
+            outline=ACCENT,
+            width=2,
+            tags="overlay"
+        )
+
+        self.canvas.create_text(
+            WIDTH // 2, 305,
+            text=title,
+            fill=PINK_TEXT,
+            font=("Consolas", 26, "bold"),
+            tags="overlay"
+        )
+
+        self.canvas.create_text(
+            WIDTH // 2, 348,
+            text=subtitle,
+            fill=TEXT,
+            font=("Consolas", 11),
+            tags="overlay"
+        )
